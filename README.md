@@ -1,5 +1,45 @@
 # unraid_vm_icons
 
+## Fork image for Unraid
+
+This fork combines Omarchy/Talos Linux icons and the Agents category while the
+upstream pull requests are reviewed. It uses the original Bash installer, not the
+newer upstream web UI. GitHub Actions tests the installer and publishes AMD64 and
+ARM64 images whenever this fork's `master` branch changes.
+
+**Image:** `ghcr.io/rasmuslauritsen/unraid_vm_icons:latest`
+
+Each build also publishes an immutable `sha-<full commit SHA>` tag.
+The installer downloads icon files from this fork's current `master` branch on
+cache refresh, even when the container image is pinned to a commit tag.
+
+### Switch an existing Unraid container
+
+1. Edit `vm_custom_icons` on the Docker page and set **Repository** to
+   `ghcr.io/rasmuslauritsen/unraid_vm_icons:latest`.
+2. Keep the existing `/config` and `/unraid_vm_icons` path mappings.
+3. Add a Variable with **Key** `agents` and **Value** `yes` to enable agent icons.
+   The updated [template.xml](template.xml) also includes an **agent icons** dropdown.
+4. Set **Clear all icons & redownload** (`delete`) to `yes` for the first run.
+   This rebuilds the icon cache from the selected categories in this fork.
+5. Apply the changes and start the container. It syncs the selected icons, waits
+   30 seconds by default, then exits normally. Refresh the VM editor to see the icons.
+6. Set `delete` back to `no` to reuse the cache on subsequent starts. Enable it
+   again whenever you want to refresh the selected icon categories.
+
+For a fresh template installation, save the raw
+[template.xml](https://raw.githubusercontent.com/RasmusLauritsen/unraid_vm_icons/master/template.xml)
+as `/boot/config/plugins/dockerMan/templates-user/my-vm_custom_icons_fork.xml`,
+then select it from **Docker → Add Container → Template**. Avoid running two icon
+sync containers against the same VM Manager directory at the same time.
+
+### Image publishing
+
+The workflow uses GitHub's built-in `GITHUB_TOKEN`; no registry credentials are
+stored in this repository. A newly created GHCR package may initially be private.
+To allow Unraid to pull without signing in, set the package visibility to
+**Public** in the GitHub package settings.
+
 A docker container that downloads and installs additional custom VM icons to the Unraid VM Manager.
 
 Please install this from the Unraid community applications plugin.

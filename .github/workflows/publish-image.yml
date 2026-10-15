@@ -1,0 +1,72 @@
+name: Publish container image
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-image-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'RasmusLauritsen/unraid_vm_icons'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate installer and template
+        run: |
+          bash -n icon_download.sh
+          python3 -c 'import xml.etree.ElementTree as ET; ET.parse("template.xml")'
+          git diff --check
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Build native smoke-test image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: unraid-vm-icons:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Test real icon download and VM Manager sync
+        run: |
+          config=$(mktemp -d)
+          images=$(mktemp -d)
+          docker run --rm \
+            -e stock=yes -e windows=no -e linux=yes -e freebsd=no \
+            -e macos=no -e other=no -e agents=yes -e delete=no -e tune=no \
+            -e 'sleeptimehuman=30 seconds' \
+            -v "$config:/config" -v "$images:/unraid_vm_icons" \
+            unraid-vm-icons:test
+          for file in icons/Agents/*.png icons/Linux/Omarchy.png icons/Linux/Talos.png; do
+            cmp "$file" "$images/$(basename "$file")"
+          done
+          test -f "$images/default.png"
+          test ! -e "$images/Windows_10b.png"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish AMD64 and ARM64 images
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/rasmuslauritsen/unraid_vm_icons:latest
+            ghcr.io/rasmuslauritsen/unraid_vm_icons:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
